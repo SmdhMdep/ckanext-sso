@@ -1,0 +1,14 @@
+# sso-js:
+#   filter: rjsmin
+#   output: ckanext-sso/%(version)s-sso.js
+#   contents:
+#     - js/sso.js
+#   extra:
+#     preload:
+#       - base/main
+
+# sso-css:
+#   filter: cssrewrite
+#   output: ckanext-sso/%(version)s-sso.css
+#   contents:
+#     - css/sso.css
