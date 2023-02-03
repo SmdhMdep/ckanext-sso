@@ -1,4 +1,4 @@
-[![Tests](https://github.com/STFC/ckanext-sso/workflows/Tests/badge.svg?branch=main)](https://github.com/STFC/ckanext-sso/actions)
+[![Tests](https://github.com/SmdhMdep/ckanext-sso/actions/workflows/test.yml/badge.svg)](https://github.com/SmdhMdep/ckanext-sso/actions/workflows/test.yml)
 
 # ckanext-sso
 
