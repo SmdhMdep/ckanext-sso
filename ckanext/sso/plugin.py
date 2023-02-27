@@ -55,17 +55,18 @@ class SsoPlugin(plugins.SingletonPlugin):
         # Check if their organisation exist
         # If org does exist add them to it at assigned level
         orgChecker = False
-        for x in organizations:
-            if (x["title"] == saml_attributes["member"][0]):
-                data = {"id" : x["id"] , "username" : str(toolkit.g.userobj.id), "role" : userOrgRole}
-                toolkit.get_action("organization_member_create")({'ignore_auth': True}, data)
-                orgChecker = True
-                break
 
-        if (not orgChecker):
-            data = {"name" : saml_attributes["member"][0].replace(' ', '-').lower(), "title": saml_attributes["member"][0], "state" : "active", "users": [{"name" : str(toolkit.g.userobj.id), "capacity": userOrgRole}]}
+        try:
+            for x in organizations:
+                if (x["title"] == saml_attributes["member"][0]):
+                    data = {"id" : x["id"] , "username" : str(toolkit.g.userobj.id), "role" : userOrgRole}
+                    toolkit.get_action("organization_member_create")({'ignore_auth': True}, data)
+                    orgChecker = True
 
-            log.debug(data)
-            toolkit.get_action("organization_create")({'ignore_auth': True},data)
-
+            if (not orgChecker):
+                data = {"name" : saml_attributes["member"][0].replace(' ', '-').lower(), "title": saml_attributes["member"][0], "state" : "active", "users": [{"name" : str(toolkit.g.userobj.id), "capacity": userOrgRole}]}
+                toolkit.get_action("organization_create")({'ignore_auth': True},data)
+        except:
+            log.debug("Users without group logged in")
+        
         return resp
