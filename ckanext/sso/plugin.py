@@ -67,6 +67,5 @@ class SsoPlugin(plugins.SingletonPlugin):
                 data = {"name" : saml_attributes["member"][0].replace(' ', '-').lower(), "title": saml_attributes["member"][0], "state" : "active", "users": [{"name" : str(toolkit.g.userobj.id), "capacity": userOrgRole}]}
                 toolkit.get_action("organization_create")({'ignore_auth': True},data)
         except:
-            log.debug("Users without group logged in")
-        
+            log.exception("Users without group logged in")
         return resp
