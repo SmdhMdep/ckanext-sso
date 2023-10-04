@@ -1,15 +1,30 @@
 from ckan import plugins
 import ckan.model as model
-import ckan.authz as authz
 from ckan.plugins import toolkit
 
 from ckanext.saml2auth.interfaces import ISaml2Auth
 
-from six import text_type
-from urllib import request
 import logging
 
+
 log = logging.getLogger(__name__)
+
+CKAN_ADMIN_ROLE = "ckan-admin-9846AitQ"
+
+FALLBACK_MEMBER_ROLE = "member"
+
+ordered_role_mappings = [
+    ["Org-admin", "admin"],
+    ["Org-Editor", "editor"],
+    ["Org-member", "member"],
+]
+"""
+A mapping of the expected SAML role attribute to the organization role.
+
+This mapping is ordered by priority. For example, users with both Org-admin and Org-member roles
+should be assigned the admin role because Org-admin appears first in the mapping.
+"""
+
 
 class SsoPlugin(plugins.SingletonPlugin):
     plugins.implements(plugins.IConfigurer)
@@ -19,53 +34,56 @@ class SsoPlugin(plugins.SingletonPlugin):
         toolkit.add_template_directory(config_, 'templates')
 
     def after_saml2_login(self, resp, saml_attributes):
+        roles = saml_attributes.get("Role", [])
+        is_ckan_admin = has_role(roles, CKAN_ADMIN_ROLE)
+        user_org_role = next(
+            (mapping[1] for mapping in ordered_role_mappings if has_role(roles, mapping[0])),
+            FALLBACK_MEMBER_ROLE
+        )
 
-        isCkanAdmin = False
-        userOrgRole = "member"
-        
-        # Try required for if no "role" is in saml attributes
-        try:
-            for x in saml_attributes["Role"]:
-                if (x == "ckan-admin-9846AitQ"):
-                    isCkanAdmin = True
-                elif (x == "Org-admin"):
-                    userOrgRole = "admin"
-                elif (x == "Org-Editor"):
-                    userOrgRole = "editor"
-        except:
-            userOrgRole = "member"
+        username = str(toolkit.g.userobj.name)
+        user_id = str(toolkit.g.userobj.id)
+        user = model.User.by_name(username)
 
-        # Admin check
-        username = toolkit.g.userobj.name
-        user = model.User.by_name(text_type(username))
-
-        if (isCkanAdmin):
+        if is_ckan_admin:
             user.sysadmin = True
             model.Session.add(user)
             model.Session.commit()
-            return resp # if admin skip, org check
-        else:
-            user.sysadmin = False
-            model.Session.add(user)
-            model.Session.commit()
+            return resp
 
-        # Organisation check
-        organizations = toolkit.get_action("organization_list")({'ignore_auth': True},{"all_fields": True })
+        # remove sysadmin privileges
+        user.sysadmin = False
+        model.Session.add(user)
+        model.Session.commit()
 
-        # Check if their organisation exist
-        # If org does exist add them to it at assigned level
-        orgChecker = False
+        # Check if their organisation exist. If it does, add them to it at assigned level
+        try:
+            expected_org_title = saml_attributes["member"][0] # use the first organization in the list only
+            expected_org_name = expected_org_title.replace(' ', '-').lower()
+        except (KeyError, IndexError):
+            log.error("unexpected user with no group membership: %s", username)
+            return resp
 
         try:
-            for x in organizations:
-                if (x["title"] == saml_attributes["member"][0]):
-                    data = {"id" : x["id"] , "username" : str(toolkit.g.userobj.id), "role" : userOrgRole}
-                    toolkit.get_action("organization_member_create")({'ignore_auth': True}, data)
-                    orgChecker = True
+            organization = toolkit.get_action("organization_show")({'ignore_auth': True}, {"id": expected_org_name})
+        except toolkit.ObjectNotFound:
+            organization = None
 
-            if (not orgChecker):
-                data = {"name" : saml_attributes["member"][0].replace(' ', '-').lower(), "title": saml_attributes["member"][0], "state" : "active", "users": [{"name" : str(toolkit.g.userobj.id), "capacity": userOrgRole}]}
-                toolkit.get_action("organization_create")({'ignore_auth': True},data)
+        try:
+            if organization:
+                log.info("adding user %s to organization %s", username, organization['name'])
+                data = {"id" : organization["id"] , "username" : user_id, "role" : user_org_role}
+                toolkit.get_action("organization_member_create")({'ignore_auth': True}, data)
+            else:
+                log.info("creating organization %s with user %s", expected_org_name, username)
+                org_users = [{"name" : user_id, "capacity": user_org_role}]
+                data = {"name": expected_org_name, "title": expected_org_title, "users": org_users}
+                toolkit.get_action("organization_create")({'ignore_auth': True}, data)
         except:
-            log.exception("Users without group logged in")
+            log.exception("unable to create user %s organization membership for %s", username, expected_org_name)
+
         return resp
+
+
+def has_role(roles, role):
+    return any(r == role for r in roles)
