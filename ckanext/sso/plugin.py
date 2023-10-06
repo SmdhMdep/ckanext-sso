@@ -68,8 +68,9 @@ class SsoPlugin(plugins.SingletonPlugin):
             current_orgs = toolkit.get_action("organization_list_for_user")({'ignore_auth': True}, {})
             IsInOrg = False
             for org in current_orgs:
-                if org["name"] == expected_org_name: #if user is already in correct org
-                    IsInOrg = True
+                if not HasNoOrg: #If they have no org no need to check if the current org is their org
+                    if org["name"] == expected_org_name : #if user is already in correct org
+                        IsInOrg = True
                 else:
                     try:
                         toolkit.get_action("organization_member_delete")({'ignore_auth': True}, {"id": org["name"], "username": user_id})
