@@ -54,24 +54,31 @@ class SsoPlugin(plugins.SingletonPlugin):
             user.sysadmin = False
             model.Session.add(user)
             model.Session.commit()
-
-            # Remove from all orgs, Simpler logic than the other option.
-            current_orgs = toolkit.get_action("organization_list_for_user")({'ignore_auth': True}, {})
-            for org in current_orgs:
-                try:
-                    toolkit.get_action("organization_member_delete")({'ignore_auth': True}, {"id": org["name"], "username": user_id})
-                except (KeyError, IndexError):
-                    log.error("Cannot delete from: %s", org["name"])
                 
             # get users organisation from saml attributes
             try:
                 expected_org_title = saml_attributes["member"][0] # use the first organization in the list only
                 expected_org_name = expected_org_title.replace(' ', '-').lower()
-            except:
+            except (KeyError, IndexError):
                 log.error("%s doesn't have a organisation", username)
                 return resp
             
-            # Check if orga
+            # Remove from all orgs other than the one they are meant to be in
+            current_orgs = toolkit.get_action("organization_list_for_user")({'ignore_auth': True}, {})
+            IsInOrg = False
+            for org in current_orgs:
+                if org["name"] == expected_org_name: #if user is already in correct org
+                    IsInOrg = True
+                else:
+                    try:
+                        toolkit.get_action("organization_member_delete")({'ignore_auth': True}, {"id": org["name"], "username": user_id})
+                    except:
+                        log.error("Cannot delete from: %s", org["name"])
+
+            if IsInOrg: #If user is already in the org no need to do processing below
+                return resp
+            
+            # Get all organisations
             try:
                 organization = toolkit.get_action("organization_show")({'ignore_auth': True}, {"id": expected_org_name})
             except toolkit.ObjectNotFound:
