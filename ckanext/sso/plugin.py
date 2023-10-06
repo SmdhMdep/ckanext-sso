@@ -56,12 +56,13 @@ class SsoPlugin(plugins.SingletonPlugin):
             model.Session.commit()
                 
             # get users organisation from saml attributes
+            HasNoOrg = False
             try:
                 expected_org_title = saml_attributes["member"][0] # use the first organization in the list only
                 expected_org_name = expected_org_title.replace(' ', '-').lower()
             except (KeyError, IndexError):
                 log.error("%s doesn't have a organisation", username)
-                return resp
+                HasNoOrg = True
             
             # Remove from all orgs other than the one they are meant to be in
             current_orgs = toolkit.get_action("organization_list_for_user")({'ignore_auth': True}, {})
@@ -75,7 +76,12 @@ class SsoPlugin(plugins.SingletonPlugin):
                     except:
                         log.error("Cannot delete from: %s", org["name"])
 
-            if IsInOrg: #If user is already in the org no need to do processing below
+            #If user is already in the org no need to do processing below
+            if IsInOrg: 
+                return resp
+            
+            #If the user has no org than no need to do more processing
+            if HasNoOrg:
                 return resp
             
             # Get all organisations
