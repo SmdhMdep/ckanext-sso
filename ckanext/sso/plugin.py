@@ -90,6 +90,7 @@ class SsoPlugin(plugins.SingletonPlugin):
                 if organization:
                     log.info("adding user %s to organization %s with role %s", username, organization['name'], user_org_role)
                     data = {"id" : organization["id"] , "username" : user_id, "role" : user_org_role}
+                    # if the membership already exists, ckan will do an update instead of a create
                     toolkit.get_action("organization_member_create")({'ignore_auth': True}, data)
                 else:
                     log.info("creating organization %s and adding user %s with role %s", expected_org_name, username, user_org_role)
